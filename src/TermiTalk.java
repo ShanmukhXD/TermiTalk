@@ -30,6 +30,7 @@ public class TermiTalk {
     void chat() throws IOException, URISyntaxException {
         BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
         PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
+
         Thread receiveThread = new Thread(() -> {
             try{
                 String msg = " ";
