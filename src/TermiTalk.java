@@ -1,71 +1,77 @@
-import java.awt.*;
-import java.net.*;
+import java.awt.Desktop;
 import java.io.*;
-import java.util.*;
+import java.net.*;
+import java.util.Scanner;
+import java.net.URI;
 
 public class TermiTalk {
-    static ServerSocket server;
-    static Socket socket;
-    static TermiTalk talk = new  TermiTalk();
-    public static void main(String[] args) throws IOException, URISyntaxException {
-        talk.startServer();
-        talk.chat();
+    public static void main(String[] args) {
+        TermiTalk talk = new TermiTalk();
+        talk.runServer();
     }
-    void startServer() {
-        try {
-            server = new ServerSocket(8888);
+
+    void runServer() {
+        try (ServerSocket server = new ServerSocket(8888)) {
             System.out.println("Server started. Waiting for client...");
-            socket = server.accept();
-            String clientIP = socket.getInetAddress().getHostAddress();
-            System.out.println("Connected from: " + clientIP);
-            if(!clientIP.equals("192.168.29.142")) {
-                socket.close();
-                System.exit(0);
+            try (Socket socket = server.accept()) {
+                String clientIP = socket.getInetAddress().getHostAddress();
+                System.out.println("Connected from: " + clientIP);
+                if (!(clientIP.equals("192.168.29.142") || clientIP.equals("192.168.29.229"))) {
+                    System.out.println("Unauthorized client. Closing connection.");
+                    return;
+                }
+                System.out.println("Client connected!");
+                chat(socket);
             }
-            System.out.println("Client connected!");
         } catch (IOException e) {
-            System.out.println("Error: " + e.getMessage());
+            System.out.println("Server error: " + e.getMessage());
         }
     }
-    void chat() throws IOException, URISyntaxException {
-        BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-        PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
 
-        Thread receiveThread = new Thread(() -> {
-            try{
-                String msg = " ";
-                while(true){
-                    msg = in.readLine();
-                    if(msg.startsWith("server.")){
-                        String cmd = msg.substring(7);
-                        if(cmd.equalsIgnoreCase("exit"))
-                            System.exit(0);
-                        if(cmd.equalsIgnoreCase("open-chrome"))
-                            Runtime.getRuntime().exec("C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe");
-                        if(cmd.equalsIgnoreCase("open-music"))
-                            Desktop.getDesktop().browse(new URI("https://music.youtube.com"));
+    void chat(Socket socket) {
+        try (BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+             PrintWriter out = new PrintWriter(socket.getOutputStream(), true)) {
+            Thread receiveThread = new Thread(() -> {
+                try {
+                    String msg;
+                    while ((msg = in.readLine()) != null) {
+                        if (msg.startsWith("server.")) {
+                            String cmd = msg.substring(7).toLowerCase();
+                            switch (cmd) {
+                                case "exit":
+                                    System.exit(0);
+                                break;
+                                case "open-chrome" :
+                                    new ProcessBuilder("C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe").start();
+                                break;
+                                case "open-music" :
+                                    if (Desktop.isDesktopSupported())
+                                        Desktop.getDesktop().browse(new URI("https://music.youtube.com"));
+                                break;
+                            }
+                        }
+                        System.out.println("Client: " + msg);
                     }
-                    if(msg.startsWith("server.cmd ")) {
-                        String cmd = msg.substring(11);
-                        Process proc = Runtime.getRuntime().exec("cmd /c" + cmd);
-                        BufferedReader read = new BufferedReader(new InputStreamReader(proc.getInputStream()));
-                        out.println(read.readLine());
-                    }
-                    System.out.println("Client: " + msg);
+                } catch (Exception e) {
+                    System.out.println("Receive thread error: " + e.getMessage());
                 }
-            } catch(Exception e) {
-                System.out.println("Error");
-            }
-        });
-        receiveThread.start();
-        Thread sendThread  = new Thread(() -> {
-            Scanner sc = new Scanner(System.in);
-            String msg = " ";
-            while(true){
-                msg = sc.nextLine();
-                out.println("Server: " + msg);
-            }
-        });
-        sendThread.start();
+            });
+            receiveThread.start();
+
+            Thread sendThread = new Thread(() -> {
+                Scanner sc = new Scanner(System.in);
+                while (true) {
+                    String msg = sc.nextLine();
+                    out.println(msg);
+                }
+            });
+            sendThread.start();
+
+            receiveThread.join();
+            sendThread.join();
+
+        } catch (Exception e) {
+            System.out.println("Chat error: " + e.getMessage());
+        }
     }
 }
